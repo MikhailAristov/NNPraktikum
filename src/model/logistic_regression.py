@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
-
+import sys
+import logging
 import numpy as np
-
 from util.activation_functions import Activation
 from model.classifier import Classifier
 
-__author__ = "ABC XYZ"  # Adjust this when you copy the file
-__email__ = "ABC.XYZ@student.kit.edu"  # Adjust this when you copy the file
+__author__ = "Mikhail Aristov"
+__email__ = "mikhail.aristov@student.kit.edu"
 
+logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
+                    level=logging.DEBUG,
+                    stream=sys.stdout)
 
 class LogisticRegression(Classifier):
     """
@@ -29,6 +32,7 @@ class LogisticRegression(Classifier):
     weight : list
     learningRate : float
     epochs : positive int
+    errorThreshold : positive float
     """
 
     def __init__(self, train, valid, test, learningRate=0.01, epochs=50):
@@ -43,12 +47,44 @@ class LogisticRegression(Classifier):
         # Initialize the weight vector with small values
         self.weight = 0.01*np.random.randn(self.trainingSet.input.shape[1])
 
+        # Stop learning if the MSE drops below this value
+        self.errorThreshold = 0.02
+
     def train(self):
         """Train the Logistic Regression"""
-        # TODO: Here you have to implement the Logistic Regression Training
-        # Algorithm
-        # TODO: use self.trainingSet
-        # TODO: use self.validationSet
+        # Selt MSE as the error function
+        from util.loss_functions import MeanSquaredError
+        loss = MeanSquaredError()
+
+        learned = False
+        iteration = 0
+
+        while not learned:
+            iteration += 1
+            # Attempt to classify each symbol and update the weights accordingly
+            for input, label in zip(self.trainingSet.input, self.trainingSet.label):
+                output = self.fire(input)
+                delta = (label - output) * output * (1 - output)
+                self.updateWeights(input, delta)
+
+            # Calculate the total error function with current weights
+            error = loss.calculateError(self.validationSet.label, map(self.fire, self.validationSet.input))
+
+            # Exit if error threshold or max epochs reached
+            if error <= self.errorThreshold or iteration >= self.epochs:
+                learned = True
+            logging.info("Iteration: %i; Error: %.4f", iteration, error)
+
+    def updateWeights(self, input, delta):
+        """Update input weights.
+
+        Parameters
+        ----------
+        input : list of floats
+        delta : float
+        """
+        for index in xrange(len(input)):
+            self.weight[index] += self.learningRate * delta * input[index]
 
     def classify(self, testInstance):
         """Classify a single instance.
@@ -62,9 +98,7 @@ class LogisticRegression(Classifier):
         bool :
             True if the testInstance is recognized as a 7, False otherwise.
         """
-        # TODO: Here you have to implement the Logistic Regression Algorithm
-        # to classify a single instance
-        pass
+        return (self.fire(testInstance) >= 0.5)
 
     def evaluate(self, test=None):
         """Evaluate a whole dataset.

@@ -58,9 +58,9 @@ def main():
     # evaluator.printComparison(data.testSet, perceptronPred)
     evaluator.printAccuracy(data.testSet, perceptronPred)
 
-    # print("\nResult of the Logistic Regression recognizer:")
+    print("\nResult of the Logistic Regression recognizer:")
     # evaluator.printComparison(data.testSet, perceptronPred)
-    # evaluator.printAccuracy(data.testSet, lrPred)
+    evaluator.printAccuracy(data.testSet, lrPred)
 
     # eval.printConfusionMatrix(data.testSet, pred)
     # eval.printClassificationResult(data.testSet, pred, target_names)
