@@ -52,7 +52,7 @@ class Perceptron(Classifier):
 
         Parameters
         ----------
-        verbose : bool
+        verbose : boolean
             Print logging messages with validation accuracy if verbose is True.
         """
 
@@ -72,9 +72,12 @@ class Perceptron(Classifier):
                     self.updateWeights(input, error)
                     totalError += error
 
+            iteration += 1
+            
             if verbose:
-                logging.info("Iteration: %i; Error: %i", iteration, -totalError)
-                iteration += 1
+                logging.info("Epoch: %i; Error: %i", iteration, -totalError)
+            
+            
 
             if totalError == 0 or iteration >= self.epochs:
                 # stop criteria is reached
@@ -100,7 +103,7 @@ class Perceptron(Classifier):
         Parameters
         ----------
         test : the dataset to be classified
-        if no test, the test set associated to the classifier will be used 
+        if no test data, the test set associated to the classifier will be used
 
         Returns
         -------
@@ -114,8 +117,7 @@ class Perceptron(Classifier):
         return list(map(self.classify, test))
 
     def updateWeights(self, input, error):
-        for index in xrange(len(self.weight)):
-            self.weight[index] += self.learningRate*error*input[index]
+        self.weight += self.learningRate*error*input
 
     def fire(self, input):
         """Fire the output of the perceptron corresponding to the input """
