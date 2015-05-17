@@ -1,9 +1,14 @@
 eclipse.preferences.version=1
 encoding//src/Run.py=utf-8
+encoding//src/RunSine.py=utf-8
+encoding//src/RunXOR.py=utf-8
+encoding//src/data/custom_data_set.py=utf-8
 encoding//src/data/data_set.py=utf-8
 encoding//src/data/mnist_seven.py=utf-8
+encoding//src/data/xor_data.py=utf-8
 encoding//src/model/classifier.py=utf-8
 encoding//src/model/logistic_regression.py=utf-8
+encoding//src/model/mlp_xor.py=utf-8
 encoding//src/model/perceptron.py=utf-8
 encoding//src/model/stupid_recognizer.py=utf-8
 encoding//src/report/evaluator.py=utf-8
