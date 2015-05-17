@@ -8,7 +8,6 @@ Loss functions.
 
 from abc import ABCMeta, abstractmethod
 
-
 class Error:
     """
     Abstract class of an Error
@@ -48,12 +47,21 @@ class MeanSquaredError(Error):
     """
 
     def calculateError(self, target, output):
+        """
+        Calculate error
+        ----------
+        target : list
+        output : list
+            target and output must be the same length!
+        Returns
+        -------
+        float :
+            the mean squared error value
+        """
         # Here you have to calculate the MeanSquaredError
         # MSE = 1/n*sum (i=1 to n) of (target_i - output_i)^2)
-        sum = 0
-        for targetValue, outputValue in zip(target, output):
-            sum += (targetValue - outputValue) * (targetValue - outputValue)
-        return (sum / len(target))
+        result = map(lambda t, o: (t - o) * (t - o), target, output)
+        return (0.5 * sum(result) / len(result))
 
 class SumSquaredError(Error):
     """
@@ -64,7 +72,8 @@ class SumSquaredError(Error):
     def calculateError(self, target, output):
         # Here you have to calculate the SumSquaredError
         # MSE = 1/2*sum (i=1 to n) of (target_i - output_i)^2)
-        pass
+        result = map(lambda t, o: 0.5 * (t - o) * (t - o), target, output)
+        return sum(result)
 
 
 class CrossEntropyError(Error):

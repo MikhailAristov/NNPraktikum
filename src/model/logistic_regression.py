@@ -48,7 +48,7 @@ class LogisticRegression(Classifier):
         self.weight = 0.01*np.random.randn(self.trainingSet.input.shape[1])
 
         # Stop learning if the MSE drops below this value
-        self.errorThreshold = 0.02
+        self.errorThreshold = 0.01
 
     def train(self):
         """Train the Logistic Regression"""
