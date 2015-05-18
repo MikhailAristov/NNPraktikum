@@ -5,7 +5,7 @@
 Loss functions.
 """
 
-
+from numpy import log2
 from abc import ABCMeta, abstractmethod
 
 class Error:
@@ -83,4 +83,5 @@ class CrossEntropyError(Error):
     """
 
     def calculateError(self, target, output):
-        pass
+        result = map(lambda t, o: t * log2(o) + (1 - t) * log2(1 - o), target, output)
+        return -1.0 * sum(result)
