@@ -62,7 +62,15 @@ class Activation:
     @staticmethod
     def softmax(netOutput):
         # Here you have to code the softmax function
-        pass
+        ex = exp(1.0*netOutput)
+        exsum = sum(ex)
+        return divide(ex, exsum)
+
+    @staticmethod
+    def softmaxPrime(netOutput):
+        # Here you have to code the softmax function
+        sm = Activation.softmax(netOutput)
+        return map(lambda phi: phi * (1 - phi), sm)
 
     @staticmethod
     def getActivation(str):
@@ -92,6 +100,8 @@ class Activation:
 
         if str == 'sigmoid':
             return Activation.sigmoidPrime
+        elif str == 'softmax':
+            return Activation.softmaxPrime
         elif str == 'tanh':
             return Activation.tanhPrime
         elif str == 'relu':
