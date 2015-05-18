@@ -14,7 +14,7 @@ class Layer(object):
     nIn: int: number of units from the previous layer (or input data)
     nOut: int: number of units of the current layer (or output)
     activation: string: activation function of every units in the layer
-    W: weight matrix with the shape of (nOut, nIn + 1), 1 for the bias
+    maxInitWeight: float: highest initial (random) weight in the layer
     Attributes
     ----------
     nIn : positive int:
@@ -31,9 +31,11 @@ class Layer(object):
         number of units in the current layer
     shape : tuple
         shape of the layer, is also shape of the weight matrix
+    transposedWeights : ndarray
+        transposed weight matrix (optimization)
     """
 
-    def __init__(self, nIn, nOut, weights=None, activation='sigmoid'):
+    def __init__(self, nIn, nOut, weights=None, activation='sigmoid', maxInitWeight=1.0):
 
         # Get activation function from string
         # Notice the functional programming paradigms of Python + Numpy
@@ -47,7 +49,7 @@ class Layer(object):
         # You can have better initialization here
         if weights is None:
             rns = np.random.RandomState(int(time.time()))
-            self.weights = rns.uniform(size=(nOut, nIn + 1))
+            self.weights = rns.uniform(size=(nOut, nIn + 1), high=maxInitWeight)
         else:
             self.weights = weights
 
@@ -73,7 +75,7 @@ class Layer(object):
         # Here is just an example to ensure you have correct shape of output
         #netOutput = np.full(shape=(1, self.nOut), 1)
         netOutput = np.dot(input, self.transposedWeights)
-        return map(self.activation, netOutput)
+        return self.activation(netOutput)
 
     def computeDerivative(self, input):
         """
@@ -89,7 +91,7 @@ class Layer(object):
         """
         # Here you have to compute the derivative values
         netOutput = np.dot(input, self.transposedWeights)        
-        return map(self.derivative, netOutput)
+        return self.derivative(netOutput)
     
     def updateWeights(self, deltas):
         """
