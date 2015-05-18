@@ -41,7 +41,7 @@ class MultilayerPerceptron(Classifier):
     def __init__(self, train, valid, test, hiddenLayers, outputDim, learningRate=0.01, epochs=50):
         self.learningRate = learningRate
         self.epochs = epochs
-        self.errorDeltaThreshold = 1
+        self.errorDeltaThreshold = 0.0001
 
         self.trainingSet = train
         self.validationSet = valid
@@ -197,8 +197,7 @@ class MultilayerPerceptron(Classifier):
                 # Multiply this layer's derivative functions with the downstream's correction factors to get this layer's sigmas
                 sigmas = np.multiply(downstreamFactors, layerOutputDerivatives[l])
             # Calculate the layer weights delta (a matrix: number of neurons x number of their inputs)
-            # TODO: Fix the double transposition
-            weightDeltas = learningRate * np.dot(currentInput.transpose(), np.matrix(sigmas)).transpose()
+            weightDeltas = learningRate * np.dot(np.matrix(sigmas).transpose(), currentInput)
             # Apply weight deltas
             self.layers[l].updateWeights(weightDeltas)
             # Save the sigmas for the next step
