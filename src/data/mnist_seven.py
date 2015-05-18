@@ -29,15 +29,15 @@ class MNISTSeven(object):
 
     # dataPath = "data/mnist_seven.csv"
 
-    def __init__(self, dataPath, numTrain=3000, numValid=1000, numTest=1000):
+    def __init__(self, dataPath, numTrain=3000, numValid=1000, numTest=1000, oneHot=True):
 
         self.trainingSet = []
         self.validationSet = []
         self.testSet = []
 
-        self.load(dataPath, numTrain, numValid, numTest)
+        self.load(dataPath, numTrain, numValid, numTest, oneHot=oneHot)
 
-    def load(self, dataPath, numTrain, numValid, numTest):
+    def load(self, dataPath, numTrain, numValid, numTest, oneHot=True):
         """Load the data."""
         print("Loading data from " + dataPath + "...")
 
@@ -49,8 +49,8 @@ class MNISTSeven(object):
 
         train, valid = train[:numTrain], train[numTrain:]
 
-        self.trainingSet = DataSet(train)
-        self.validationSet = DataSet(valid)
-        self.testSet = DataSet(test)
+        self.trainingSet = DataSet(train, oneHot=oneHot)
+        self.validationSet = DataSet(valid, oneHot=oneHot)
+        self.testSet = DataSet(test, oneHot=oneHot)
 
         print("Data loaded.")
