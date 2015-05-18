@@ -38,10 +38,10 @@ class MultilayerPerceptron(Classifier):
     epochs : positive int
     """
 
-    def __init__(self, train, valid, test, hiddenLayers, outputDim, learningRate=0.01, epochs=50):
+    def __init__(self, train, valid, test, hiddenLayers, outputDim, learningRate=0.01, epochs=40):
         self.learningRate = learningRate
         self.epochs = epochs
-        self.errorDeltaThreshold = 0.0001
+        self.errorDeltaThreshold = 0.3
 
         self.trainingSet = train
         self.validationSet = valid
@@ -65,36 +65,26 @@ class MultilayerPerceptron(Classifier):
         learned = False
         iteration = 0
         prevError = 1000000
-        dynamicLearningRate = False
-        currentLearningRate = self.learningRate
+        
+        # Preprocessing for performance reasons
         validationOutputs = map(self.convertLabelToFlags, self.validationSet.label)
         
         while not learned:
             iteration += 1
             
-            # Update learning rate, if necessary
-            if dynamicLearningRate:
-                currentLearningRate *= 0.4
-            
             # Update the weights from each input in the training set
             for input, label in zip(self.trainingSet.input, self.trainingSet.label):
-                self.trainSingleInput(input, self.convertLabelToFlags(label), currentLearningRate)
+                self.trainSingleInput(input, self.convertLabelToFlags(label))
 
             # Calculate the total error function in the validation set with current weights
             error = sum(map(loss.calculateError, validationOutputs, map(self.fire, self.validationSet.input)))
             
             # Exit if error stops decreasing significantly or starts increasing again or max epochs reached
-            if iteration >= self.epochs:
+            if iteration >= self.epochs or (prevError - error) < self.errorDeltaThreshold:
                 learned = True
-            elif (prevError - error) < self.errorDeltaThreshold:
-                if not dynamicLearningRate:
-                    logging.info("Dynamic learning rate activated")
-                    dynamicLearningRate = True
-                else:
-                    learned = True
             prevError = error # Update the error value for the next iteration
     
-            logging.info("Iteration: %i; Error: %.4f", iteration, error)
+            logging.info("Iteration: %2i; Error: %9.4f", iteration, error)
             
     def convertLabelToFlags(self, label):
         """Convert a label to an MLP output array
@@ -160,7 +150,7 @@ class MultilayerPerceptron(Classifier):
             prevLayerOutput = layer.forward(np.append(prevLayerOutput, 1))
         return prevLayerOutput
     
-    def trainSingleInput(self, input, target, learningRate):
+    def trainSingleInput(self, input, target):
         """Trains the MLP with a specific input and output.
 
         Parameters
@@ -197,7 +187,7 @@ class MultilayerPerceptron(Classifier):
                 # Multiply this layer's derivative functions with the downstream's correction factors to get this layer's sigmas
                 sigmas = np.multiply(downstreamFactors, layerOutputDerivatives[l])
             # Calculate the layer weights delta (a matrix: number of neurons x number of their inputs)
-            weightDeltas = learningRate * np.dot(np.matrix(sigmas).transpose(), currentInput)
+            weightDeltas = self.learningRate * np.dot(np.matrix(sigmas).transpose(), currentInput)
             # Apply weight deltas
             self.layers[l].updateWeights(weightDeltas)
             # Save the sigmas for the next step
