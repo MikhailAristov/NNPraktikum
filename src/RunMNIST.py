@@ -10,7 +10,7 @@ def main():
     myMLPClassifier = MultilayerPerceptron(data.trainingSet,
                                            data.validationSet,
                                            data.testSet,
-                                           hiddenLayers=[28],
+                                           hiddenLayers=[28*3],
                                            outputDim=10)
     # Train the classifiers
     print("=========================")
@@ -19,11 +19,11 @@ def main():
     print("\nMultilayer perceptron has been training..")
     myMLPClassifier.train()
     
+    # TODO: Implement minibatches (100)
+    
     # Do the recognizer
     # Explicitly specify the test set to be evaluated
     mlpPred = myMLPClassifier.evaluate()
-
-    #print np.array(zip(data.testSet.label, mlpPred))
 
     # Report the result
     print("=========================")

@@ -33,15 +33,19 @@ class MultilayerPerceptron(Classifier):
     trainingSet : list
     validationSet : list
     testSet : list
-    weight : list
     learningRate : float
     epochs : positive int
+    layers : list of layer objects
+    size : positive int
+        total number of layers
+    errorDeltaThreshold : float
+        how small the error function descrease can get before the learning is stopped early
     """
 
-    def __init__(self, train, valid, test, hiddenLayers, outputDim, learningRate=0.01, epochs=40):
+    def __init__(self, train, valid, test, hiddenLayers, outputDim, learningRate=0.1, epochs=50):
         self.learningRate = learningRate
         self.epochs = epochs
-        self.errorDeltaThreshold = 0.3
+        self.errorDeltaThreshold = 0.3 # 0.0001
 
         self.trainingSet = train
         self.validationSet = valid
@@ -49,6 +53,8 @@ class MultilayerPerceptron(Classifier):
         
         # Initialize layers
         self.layers = []
+        self.size = len(hiddenLayers) + 1
+        
         # Create hidden layers
         previousLayerSize = self.trainingSet.input.shape[1]
         for layerSize in hiddenLayers:
@@ -56,6 +62,10 @@ class MultilayerPerceptron(Classifier):
             previousLayerSize = layerSize
         # Create output layer
         self.layers.append(Layer(nIn = previousLayerSize, nOut = outputDim, activation='softmax'))
+        
+        # Cross-link each layer except the output (which obviously has no downstream) to the respective downstream layer
+        for i in xrange(self.size - 1):
+            self.layers[i].setDownstream(self.layers[i+1])
 
     def train(self):
         """Train the Multilayer perceptron"""
@@ -65,16 +75,27 @@ class MultilayerPerceptron(Classifier):
         learned = False
         iteration = 0
         prevError = 1000000
-        
+        currentLearningRate = self.learningRate
+            
         # Preprocessing for performance reasons
         validationOutputs = map(self.convertLabelToFlags, self.validationSet.label)
         
         while not learned:
             iteration += 1
+            currentLearningRate -= self.learningRate * (iteration - 1) / self.epochs
+            batchSize = 1 if iteration == 1 else len(self.trainingSet.label) / 10
             
+            currentBatchCount = 0
             # Update the weights from each input in the training set
             for input, label in zip(self.trainingSet.input, self.trainingSet.label):
-                self.trainSingleInput(input, self.convertLabelToFlags(label))
+                self.fire(input)
+                self.learn(self.convertLabelToFlags(label), currentLearningRate)
+                
+                currentBatchCount += 1
+                if currentBatchCount >= batchSize:
+                    self.updateAllWeights()
+                    currentBatchCount = 0
+            self.updateAllWeights()
 
             # Calculate the total error function in the validation set with current weights
             error = sum(map(loss.calculateError, validationOutputs, map(self.fire, self.validationSet.input)))
@@ -146,49 +167,30 @@ class MultilayerPerceptron(Classifier):
         """
         prevLayerOutput = input
         for layer in self.layers:
-            # Pass calculate layer output with the input plus bias
+            # Pass calculated layer output with the input plus bias
             prevLayerOutput = layer.forward(np.append(prevLayerOutput, 1))
         return prevLayerOutput
     
-    def trainSingleInput(self, input, target):
-        """Trains the MLP with a specific input and output.
+    def learn(self, targetOutput, learningRate):
+        """Backpropagate the error through all layers.
+        This method does not return anything and only updates the cumulativeWeightsUpdate attribute of each layer.
+        updateAllWeights() has to be called to actually update the weights in the layers.
 
         Parameters
         ----------
-        input : list of floats
-        target : list of floats
-        learningRate : float
+        targetOutput : list of floats
         """
-        # First, calculate output of every layer; this is functionally identical to the fire() method, except it saves each layer's output separately
-        layerOutputs = []
-        layerOutputDerivatives = []
-        for layer in self.layers:
-            # For the first layer, take the input parameter as input, for all higher levels, take the respective previous layers output
-            currentInput = input if len(layerOutputs) == 0 else layerOutputs[-1]
-            # Calculate the current layer's output and derivatives and add them to the respective arrays (append 1 to input for the bias)
-            layerOutputs.append(layer.forward(np.append(currentInput, 1)))
-            #print layer.forward(np.append(currentInput, 1))
-            layerOutputDerivatives.append(layer.computeDerivative(np.append(currentInput, 1)))
-        # Now we have all the layer outputs in format layerOutputs[layerNumberFromTheBottom][neuronNumber], and likewise the derivatives
-        
-        # Then, go from the TOP of the output stack and backpropagate the error
+        # Go from the TOP of the layer stack and backpropagate the error
         downstreamSigmas = None
-        for l in xrange(len(layerOutputs)-1, -1, -1):
-            # Current layer's input is the previous layer's output plus bias, unless it's the first hidden layer, in which case it takes the input
-            currentInput = np.matrix(np.append(input if l == 0 else layerOutputs[l-1], 1))
-            # Update the weights
-            if downstreamSigmas is None: # i.e. this is the output layer
-                # Calculate layer sigmas (a list with as many elements as there are neurons in the output layer)
-                sigmas = target - layerOutputs[l]
-            else: # i.e. this is one of the hidden layers
-                # Downstream factors := downstream sigmas x downstream weights (in this network design, the downstream is the complete layer above)
-                # Note that the last weight of each downstream neuron is the bias weight, which doesn't influence this layer's weights, so it is filtered out
-                downstreamFactors = np.dot(downstreamSigmas, self.layers[l+1].weights[:,:-1])
-                # Multiply this layer's derivative functions with the downstream's correction factors to get this layer's sigmas
-                sigmas = np.multiply(downstreamFactors, layerOutputDerivatives[l])
-            # Calculate the layer weights delta (a matrix: number of neurons x number of their inputs)
-            weightDeltas = self.learningRate * np.dot(np.matrix(sigmas).transpose(), currentInput)
-            # Apply weight deltas
-            self.layers[l].updateWeights(weightDeltas)
-            # Save the sigmas for the next step
-            downstreamSigmas = sigmas
+        for layer in reversed(self.layers):
+            if downstreamSigmas is None: # i.e. this is the output (highest) layer
+                downstreamSigmas = layer.backward(learningRate, targetOutput=targetOutput)
+            else: # i.e. this is a hidden layer
+                downstreamSigmas = layer.backward(learningRate, downstreamSigmas=downstreamSigmas)
+                
+    def updateAllWeights(self):
+        """
+        Updates all weights in all layers of the MLP, using the data stored in the cumulativeWeightsUpdate attribute of each layer.
+        """
+        for layer in self.layers:
+            layer.updateWeights()
