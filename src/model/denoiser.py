@@ -40,7 +40,7 @@ class DenoisingAutoencoder(Autoencoder):
         total number of layers
     """
 
-    def __init__(self, train, valid, test, layerWeights=[], randomLayers=[], learningRate=0.4, epochs=100):
+    def __init__(self, train, valid, test, layerWeights=[], randomLayers=[], learningRate=0.1, epochs=100):
         self.learningRate = learningRate
         self.epochs = epochs
 
@@ -54,6 +54,7 @@ class DenoisingAutoencoder(Autoencoder):
 
         # Create hidden layers
         previousLayerSize = self.trainingSet.input.shape[1]
+        maxInitLayerWeight = 4.0 / 7840.0
         # Append fixed layers, if any
         for predefinedLayerWeight in layerWeights:
             if len(predefinedLayerWeight[0]) == previousLayerSize + 1: # +1 for bias
@@ -64,20 +65,21 @@ class DenoisingAutoencoder(Autoencoder):
         # Append random layers, if any
         for layerSize in randomLayers:
             # Input layer receives 784 inputs averaging at 0.5; their weighted sum must still be within sigmoid's effective range
-            maxInitWeightOfInputLayer = 4.0 / 784.0 if len(self.layers) == 0 else 1.0
-            self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=maxInitWeightOfInputLayer))
+            self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=maxInitLayerWeight))
             previousLayerSize = layerSize
         # Create output layer
-        self.layers.append(Layer(nIn = previousLayerSize, nOut = self.trainingSet.input.shape[1], activation='sigmoid'))
+        self.layers.append(Layer(nIn = previousLayerSize, nOut = self.trainingSet.input.shape[1], activation='sigmoid', maxInitWeight=maxInitLayerWeight))
 
         # Cross-link each layer except the output (which obviously has no downstream) to the respective downstream layer
         for i in xrange(self.size - 1):
             self.layers[i].setDownstream(self.layers[i+1])
 
-    def train(self, maskSize=0.3, errorThreshold=0.0, errorDeltaThreshold=0.01, miniBatchSize=100, weightDecay=0.0001, momentum=0.7):
+    def train(self, maskSize=0.1, errorThreshold=0.0, errorDeltaThreshold=0.01, miniBatchSize=100, weightDecay=0.0, momentum=0.0):
         """Train the denoiser autoencoder
         Parameters
         ----------
+        maskSize : positive float
+            portion of the input to be randomly masked (e.g. 0.1 for 10%)
         errorThreshold : positive float
             how small the error function can get before the learning is stopped early
         errorDeltaThreshold : float

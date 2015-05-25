@@ -59,15 +59,13 @@ class MultilayerPerceptron(Classifier):
         # Append fixed layers, if any
         for predefinedLayerWeight in layerWeights:
             if len(predefinedLayerWeight[0]) == previousLayerSize + 1: # +1 for bias
-                self.layers.append(Layer(nIn = previousLayerSize, nOut = len(predefinedLayerWeight), activation='sigmoid', weights=predefinedLayerWeight))
+                self.layers.append(Layer(nIn = previousLayerSize, nOut = len(predefinedLayerWeight), activation='sigmoid', weights=predefinedLayerWeight, frozen=True))
                 previousLayerSize = len(predefinedLayerWeight)
             else:
                 raise ValueError("Layer size mismatch!")
         # Append random layers, if any
         for layerSize in randomLayers:
-            # Input layer receives 784 inputs averaging at 0.5; their weighted sum must still be within sigmoid's effective range
-            maxInitWeightOfInputLayer = 4.0 / 784.0 if len(self.layers) == 0 else 1.0
-            self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=maxInitWeightOfInputLayer))
+            self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=0.0005))
             previousLayerSize = layerSize
         # Create output layer
         self.layers.append(Layer(nIn = previousLayerSize, nOut = outputDim, activation='softmax'))
@@ -76,7 +74,7 @@ class MultilayerPerceptron(Classifier):
         for i in xrange(self.size - 1):
             self.layers[i].setDownstream(self.layers[i+1])
 
-    def train(self, errorThreshold=650.0, errorDeltaThreshold=1.0, miniBatchSize=100, weightDecay=0.0001, momentum=0.7):
+    def train(self, errorThreshold=650.0, errorDeltaThreshold=0.01, miniBatchSize=100, weightDecay=0.0001, momentum=0.7):
         """Train the Multilayer perceptron
         Parameters
         ----------
@@ -105,7 +103,7 @@ class MultilayerPerceptron(Classifier):
             # Update the weights from each input in the training set
             for input, label in labeledInputs:
                 # Calculate the outputs (stored within the layer objects themselves) and backpropagate the errors
-                self.fire(input)
+                self.fire(input, randomNoise=0.3)
                 self.learn(self.convertLabelToFlags(label))
                 # Minibatch handling
                 if iteration <= 1 or currentBatchCount >= miniBatchSize: # The first iteration is always stochastic gradient descent, so it converges faster
@@ -173,7 +171,7 @@ class MultilayerPerceptron(Classifier):
             test = self.testSet.input
         return list(map(self.classify, test))
 
-    def fire(self, input):
+    def fire(self, input, randomNoise=0.0):
         """Calculate the raw MLP result of an input
 
         Parameters
@@ -187,7 +185,7 @@ class MultilayerPerceptron(Classifier):
         prevLayerOutput = input
         for layer in self.layers:
             # Pass calculated layer output with the input plus bias
-            prevLayerOutput = layer.forward(np.append(prevLayerOutput, 1))
+            prevLayerOutput = layer.forward(np.append(prevLayerOutput, 1), randomNoise)
         return prevLayerOutput
 
     def learn(self, targetOutput):
@@ -203,9 +201,11 @@ class MultilayerPerceptron(Classifier):
         downstreamDeltas = None
         for layer in reversed(self.layers):
             if downstreamDeltas is None: # i.e. this is the output (highest) layer
-                downstreamDeltas = layer.backward(targetOutput=targetOutput, errorFunction='CrossEntropy')
-            else: # i.e. this is a hidden layer
+                downstreamDeltas = layer.backward(targetOutput=targetOutput, errorFunction='CrossEntropyError')
+            elif not layer.frozen: # i.e. this is a hidden layer
                 downstreamDeltas = layer.backward(downstreamDeltas=downstreamDeltas)
+            else: # Stop calculation upon encountering the first frozen layer
+                break
 
     def updateAllWeights(self, learningRate, weightDecay, momentum):
         """

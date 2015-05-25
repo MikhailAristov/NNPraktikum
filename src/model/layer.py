@@ -87,7 +87,7 @@ class Layer(object):
         self.lastWeightUpdate = np.ndarray(self.weights.shape)
         self.lastWeightUpdate.fill(0.0)
 
-    def forward(self, input):
+    def forward(self, input, randomNoise=0.0):
         """
         Compute forward step over the input using its weights
         Parameters
@@ -100,7 +100,7 @@ class Layer(object):
             a numpy array (1,nOut) containing the output of the layer
         """
         # Save the last input
-        self.lastInput = np.matrix(input)
+        self.lastInput = np.matrix(self.mask(input, randomNoise))
         # Calculate the net output of the neuron
         netOutput = np.dot(input, self.transposedWeights)
         # Apply the activation function
@@ -108,6 +108,17 @@ class Layer(object):
         # Apply the derivative activation function for gradient descent
         self.lastOutputDerivatives = self.derivative(netOutput)
         return self.lastOutput
+    
+    def mask(self, input, portion):
+        # Calculate the exact number of input features to mask
+        maskedCount = int(portion * len(input))
+        # Randomly select this many features
+        maskedFeatures = np.random.choice(range(len(input)),maskedCount)
+        # Set the values of masked features to zero
+        maskedInput = np.array(input)
+        for i in maskedFeatures:
+            maskedInput[i] = 0.0
+        return maskedInput
 
     def backward(self, targetOutput=None, downstreamDeltas=None, errorFunction=None):
         """
@@ -125,7 +136,7 @@ class Layer(object):
         """
         # Calculate the deltas for the weight update, either based on expected output, or on the downstream deltas
         if self.downstream is None and targetOutput is not None: # i.e. this is the output layer
-            if(errorFunction == 'CrossEntropy'):
+            if(errorFunction == 'CrossEntropyError'):
                 deltas = targetOutput - self.lastOutput
             elif(errorFunction == 'MeanSquaredError'):
                 deltas = map(lambda t, o: (t - o) * o * (1 - o), targetOutput, self.lastOutput)
@@ -181,7 +192,7 @@ class Layer(object):
             raise TypeError("Downstream must be a layer!")
 
     
-    def saveToFile(self, layerIndex, path):
+    def saveToFile(self, path):
         """
         Saves the weights of the layer to file.
         

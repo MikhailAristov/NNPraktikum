@@ -5,6 +5,7 @@ from data.mnist_seven import MNISTSeven
 from model.stupid_classifier import StupidClassifier
 from model.mlp_mnist import MultilayerPerceptron
 from report.evaluator import Evaluator
+from model.layer import Layer
 
 def main():
     data = MNISTSeven("../data/mnist_seven.csv", 3000, 1000, 1000, oneHot=False)
@@ -14,7 +15,8 @@ def main():
     myMLPClassifier = MultilayerPerceptron(data.trainingSet,
                                            data.validationSet,
                                            data.testSet,
-                                           hiddenLayers=[40],
+                                           layerWeights=[Layer.loadFromFile("../data/features_layer_80.gz")],
+                                           randomLayers=[40],
                                            outputDim=10)
     # Train the classifiers
     print("=========================")
