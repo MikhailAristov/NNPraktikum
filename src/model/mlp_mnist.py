@@ -203,7 +203,7 @@ class MultilayerPerceptron(Classifier):
         downstreamDeltas = None
         for layer in reversed(self.layers):
             if downstreamDeltas is None: # i.e. this is the output (highest) layer
-                downstreamDeltas = layer.backward(targetOutput=targetOutput)
+                downstreamDeltas = layer.backward(targetOutput=targetOutput, errorFunction='CrossEntropy')
             else: # i.e. this is a hidden layer
                 downstreamDeltas = layer.backward(downstreamDeltas=downstreamDeltas)
 
@@ -219,29 +219,3 @@ class MultilayerPerceptron(Classifier):
         """
         for layer in self.layers:
             layer.updateWeights(learningRate, weightDecay, momentum)
-    
-    def saveLayer(self, layerIndex, path):
-        """
-        Saves the weights of the specified layer to file.
-        
-        Parameters
-        ----------
-        layerIndex : positive int
-        path : file path
-        """
-        np.savetxt(path, self.layers[layerIndex].weights, delimiter=",")
-
-    @staticmethod
-    def loadLayer(path):
-        """
-        Reads a matrix of weights from a file and returns it as an array.
-        
-        Parameters
-        ----------
-        path : file path
-
-        Returns
-        -------
-        list of lists of floats
-        """
-        return np.loadtxt(path,delimiter=",")

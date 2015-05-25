@@ -39,6 +39,8 @@ class Layer(object):
         number of units in the current layer
     shape : tuple
         shape of the layer, is also shape of the weight matrix
+    frozen : boolean
+        whether the layer weights are frozen (aren't updated)
     transposedWeights : ndarray
         transposed weight matrix (optimization)
     lastInput : ndarray
@@ -49,13 +51,14 @@ class Layer(object):
         derivatives of the last output, stored for backpropagation
     """
 
-    def __init__(self, nIn, nOut, weights=None, activation='sigmoid', maxInitWeight=1.0):
+    def __init__(self, nIn, nOut, weights=None, activation='sigmoid', maxInitWeight=1.0, frozen=False):
 
         # Get activation function from string
         # Notice the functional programming paradigms of Python + Numpy
         self.activationString = activation
         self.activation = Activation.getActivation(self.activationString)
         self.derivative = Activation.getDerivative(self.activationString)
+        self.frozen = frozen
         self.downstream = None
 
         self.nIn = nIn
@@ -106,7 +109,7 @@ class Layer(object):
         self.lastOutputDerivatives = self.derivative(netOutput)
         return self.lastOutput
 
-    def backward(self, targetOutput=None, downstreamDeltas=None):
+    def backward(self, targetOutput=None, downstreamDeltas=None, errorFunction=None):
         """
         Backpropagates the error from downstream through the layer and stores the cumulative weight updates.
         Parameters
@@ -122,7 +125,12 @@ class Layer(object):
         """
         # Calculate the deltas for the weight update, either based on expected output, or on the downstream deltas
         if self.downstream is None and targetOutput is not None: # i.e. this is the output layer
-            deltas = targetOutput - self.lastOutput # TODO: Generalize, not just cross entropy derivative
+            if(errorFunction == 'CrossEntropy'):
+                deltas = targetOutput - self.lastOutput
+            elif(errorFunction == 'MeanSquaredError'):
+                deltas = map(lambda t, o: (t - o) * o * (1 - o), targetOutput, self.lastOutput)
+            else:
+                raise ValueError("No valid error function specified")
         elif self.downstream is not None and downstreamDeltas is not None: # i.e. this is one of the hidden layers
             # Downstream factors := downstream deltas x downstream weights (in this network design, the downstream is the complete layer above)
             # Note that the last weight of each downstream neuron is the bias weight, which doesn't influence this layer's weights, so it is filtered out
@@ -148,7 +156,7 @@ class Layer(object):
         weightDecay : positive float
         momentum : positive float
         """
-        if self.learningIterationCounter > 0.0:
+        if not self.frozen and self.learningIterationCounter > 0.0:
             # Calculate the weight update
             weightUpdate = (learningRate / self.learningIterationCounter) * self.cumulativeWeightsUpdate - learningRate * weightDecay * self.weights + momentum * self.lastWeightUpdate
             # Apply the weight update
@@ -171,3 +179,30 @@ class Layer(object):
             self.downstream = layer
         else:
             raise TypeError("Downstream must be a layer!")
+
+    
+    def saveToFile(self, layerIndex, path):
+        """
+        Saves the weights of the layer to file.
+        
+        Parameters
+        ----------
+        layerIndex : positive int
+        path : file path
+        """
+        np.savetxt(path, self.weights, delimiter=",")
+
+    @staticmethod
+    def loadFromFile(path):
+        """
+        Reads a matrix of weights from a file and returns it as an array.
+        
+        Parameters
+        ----------
+        path : file path
+
+        Returns
+        -------
+        list of lists of floats
+        """
+        return np.loadtxt(path,delimiter=",")
