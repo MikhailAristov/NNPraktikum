@@ -81,6 +81,8 @@ class Layer(object):
         self.lastInput = None
         self.lastOutput = None
         self.lastOutputDerivatives = None
+        self.lastWeightUpdate = np.ndarray(self.weights.shape)
+        self.lastWeightUpdate.fill(0.0)
 
     def forward(self, input):
         """
@@ -136,19 +138,26 @@ class Layer(object):
         # Return the current layer's deltas to be propagated upstream
         return deltas
 
-    def updateWeights(self, learningRate):
+    def updateWeights(self, learningRate, weightDecay, momentum):
         """
         Update weights with the current cumulative update values.
         If called immediately after backward(), amounts to stochastic gradient descent, otherwise enables (mini-)batch GD
         Parameters
         ----------
         learningRate : positive float
+        weightDecay : positive float
+        momentum : positive float
         """
         if self.learningIterationCounter > 0.0:
-            self.weights += (learningRate / self.learningIterationCounter) * self.cumulativeWeightsUpdate
+            # Calculate the weight update
+            weightUpdate = (learningRate / self.learningIterationCounter) * self.cumulativeWeightsUpdate - learningRate * weightDecay * self.weights + momentum * self.lastWeightUpdate
+            # Apply the weight update
+            self.weights += weightUpdate
+            # Initialize/update runtime variables
             self.cumulativeWeightsUpdate.fill(0.0) # Reset the update values
             self.learningIterationCounter = 0.0  # Reset the updates counter
             self.transposedWeights = self.weights.transpose() # Performance
+            self.lastWeightUpdate = weightUpdate
 
     def setDownstream(self, layer):
         """

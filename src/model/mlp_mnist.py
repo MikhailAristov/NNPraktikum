@@ -38,14 +38,11 @@ class MultilayerPerceptron(Classifier):
     layers : list of layer objects
     size : positive int
         total number of layers
-    errorDeltaThreshold : float
-        how small the error function descrease can get before the learning is stopped early
     """
 
-    def __init__(self, train, valid, test, hiddenLayers, outputDim, learningRate=0.1, epochs=30):
+    def __init__(self, train, valid, test, hiddenLayers, outputDim, learningRate=0.1, epochs=100):
         self.learningRate = learningRate
         self.epochs = epochs
-        self.errorDeltaThreshold = 3
 
         self.trainingSet = train
         self.validationSet = valid
@@ -56,8 +53,7 @@ class MultilayerPerceptron(Classifier):
         self.size = len(hiddenLayers) + 1
 
         # Create hidden layers
-        maxInitWeightOfInputLayer = 2.0 / 784.0 # Input layer receives 784 inputs averaging at 0.5; their weighted sum must still be within sigmoid's effective range
-        print maxInitWeightOfInputLayer
+        maxInitWeightOfInputLayer = 4.0 / 784.0 # Input layer receives 784 inputs averaging at 0.5; their weighted sum must still be within sigmoid's effective range
         previousLayerSize = self.trainingSet.input.shape[1]
         for layerSize in hiddenLayers:
             self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=maxInitWeightOfInputLayer))
@@ -69,12 +65,17 @@ class MultilayerPerceptron(Classifier):
         for i in xrange(self.size - 1):
             self.layers[i].setDownstream(self.layers[i+1])
 
-    def train(self, dynamicLearningRate=True, miniBatchSize=100):
+    def train(self, errorThreshold=650.0, errorDeltaThreshold=1.0, miniBatchSize=100, weightDecay=0.0001, momentum=0.7):
         """Train the Multilayer perceptron
         Parameters
         ----------
-        dynamicLearningRate : boolean
+        errorThreshold : positive float
+            how small the error function can get before the learning is stopped early
+        errorDeltaThreshold : float
+            how small the error function decrease can get before the learning is stopped early
         miniBatchSize : positive int
+        weightDecay : positive float
+        momentum : positive float
         """
         from util.loss_functions import CrossEntropyError
         loss = CrossEntropyError()
@@ -82,7 +83,6 @@ class MultilayerPerceptron(Classifier):
         learned = False
         iteration = 0
         prevError = 1000000
-        currentLearningRate = self.learningRate
 
         # Preprocessing for performance reasons
         validationOutputs = map(self.convertLabelToFlags, self.validationSet.label)
@@ -98,21 +98,18 @@ class MultilayerPerceptron(Classifier):
                 self.learn(self.convertLabelToFlags(label))
                 # Minibatch handling
                 if iteration <= 1 or currentBatchCount >= miniBatchSize: # The first iteration is always stochastic gradient descent, so it converges faster
-                    self.updateAllWeights(currentLearningRate)
+                    self.updateAllWeights(self.learningRate, weightDecay, momentum if iteration > 1 else 0.0)
                     currentBatchCount = 0
                 else:
                     currentBatchCount += 1
             # Apply the last weight update in case the last batch was too short
-            self.updateAllWeights(currentLearningRate)
-
-            # Dynamic learning rate handling
-            if dynamicLearningRate:
-                currentLearningRate -= self.learningRate * 1 / self.epochs
+            self.updateAllWeights(self.learningRate, weightDecay, momentum if iteration > 1 else 0.0)
 
             # Calculate the total error function in the validation set with current weights
             error = sum(map(loss.calculateError, validationOutputs, map(self.fire, self.validationSet.input)))
+            errorDelta = prevError - error
             # Exit if error stops decreasing significantly or starts increasing again or max epochs reached
-            if iteration >= self.epochs or (prevError - error) < self.errorDeltaThreshold: # or error < 850.0:
+            if iteration >= self.epochs or (error < errorThreshold and errorDelta < 2.0 * errorDeltaThreshold) or errorDelta < errorDeltaThreshold:
                 learned = True
             prevError = error # Update the error value for the next iteration
 
@@ -199,9 +196,9 @@ class MultilayerPerceptron(Classifier):
             else: # i.e. this is a hidden layer
                 downstreamDeltas = layer.backward(downstreamDeltas=downstreamDeltas)
 
-    def updateAllWeights(self, learningRate):
+    def updateAllWeights(self, learningRate, weightDecay, momentum):
         """
         Updates all weights in all layers of the MLP, using the data stored in the cumulativeWeightsUpdate attribute of each layer.
         """
         for layer in self.layers:
-            layer.updateWeights(learningRate)
+            layer.updateWeights(learningRate, weightDecay, momentum)
