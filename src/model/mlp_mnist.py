@@ -21,8 +21,10 @@ class MultilayerPerceptron(Classifier):
     train : list
     valid : list
     test : list
-    hiddenLayers : list
-        A list of positive integers, indicating, in order, how many neurons each hidden layer should contain
+    layerWeights : list
+        A list of of weights (one item = a complete weight matrix of a layer)
+    randomLayers : list
+        A list of positive integers, indicating, in order, how many neurons each hidden layer (on top of the predefined layers) should contain
     outputDim : positive int
         How many neurons the output layer should contain
     learningRate : float
@@ -40,7 +42,7 @@ class MultilayerPerceptron(Classifier):
         total number of layers
     """
 
-    def __init__(self, train, valid, test, hiddenLayers, outputDim, learningRate=0.1, epochs=100):
+    def __init__(self, train, valid, test, outputDim, layerWeights=[], randomLayers=[], learningRate=0.1, epochs=100):
         self.learningRate = learningRate
         self.epochs = epochs
 
@@ -50,12 +52,21 @@ class MultilayerPerceptron(Classifier):
 
         # Initialize layers
         self.layers = []
-        self.size = len(hiddenLayers) + 1
+        self.size = len(layerWeights) + len(randomLayers) + 1
 
         # Create hidden layers
-        maxInitWeightOfInputLayer = 4.0 / 784.0 # Input layer receives 784 inputs averaging at 0.5; their weighted sum must still be within sigmoid's effective range
         previousLayerSize = self.trainingSet.input.shape[1]
-        for layerSize in hiddenLayers:
+        # Append fixed layers, if any
+        for predefinedLayerWeight in layerWeights:
+            if len(predefinedLayerWeight[0]) == previousLayerSize + 1: # +1 for bias
+                self.layers.append(Layer(nIn = previousLayerSize, nOut = len(predefinedLayerWeight), activation='sigmoid', weights=predefinedLayerWeight))
+                previousLayerSize = len(predefinedLayerWeight)
+            else:
+                raise ValueError("Layer size mismatch!")
+        # Append random layers, if any
+        for layerSize in randomLayers:
+            # Input layer receives 784 inputs averaging at 0.5; their weighted sum must still be within sigmoid's effective range
+            maxInitWeightOfInputLayer = 4.0 / 784.0 if len(self.layers) == 0 else 1.0
             self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=maxInitWeightOfInputLayer))
             previousLayerSize = layerSize
         # Create output layer
@@ -199,6 +210,38 @@ class MultilayerPerceptron(Classifier):
     def updateAllWeights(self, learningRate, weightDecay, momentum):
         """
         Updates all weights in all layers of the MLP, using the data stored in the cumulativeWeightsUpdate attribute of each layer.
+        
+        Parameters
+        ----------
+        learningRate : positive float
+        weightDecay : positive float
+        momentum : positive float
         """
         for layer in self.layers:
             layer.updateWeights(learningRate, weightDecay, momentum)
+    
+    def saveLayer(self, layerIndex, path):
+        """
+        Saves the weights of the specified layer to file.
+        
+        Parameters
+        ----------
+        layerIndex : positive int
+        path : file path
+        """
+        np.savetxt(path, self.layers[layerIndex].weights, delimiter=",")
+
+    @staticmethod
+    def loadLayer(path):
+        """
+        Reads a matrix of weights from a file and returns it as an array.
+        
+        Parameters
+        ----------
+        path : file path
+
+        Returns
+        -------
+        list of lists of floats
+        """
+        return np.loadtxt(path,delimiter=",")
