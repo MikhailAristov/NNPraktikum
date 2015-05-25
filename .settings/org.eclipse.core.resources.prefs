@@ -13,6 +13,7 @@ encoding//src/model/mlp_mnist.py=utf-8
 encoding//src/model/mlp_sine.py=utf-8
 encoding//src/model/mlp_xor.py=utf-8
 encoding//src/model/perceptron.py=utf-8
+encoding//src/model/stupid_classifier.py=utf-8
 encoding//src/model/stupid_recognizer.py=utf-8
 encoding//src/report/evaluator.py=utf-8
 encoding//src/util/activation_functions.py=utf-8

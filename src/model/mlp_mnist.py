@@ -42,33 +42,40 @@ class MultilayerPerceptron(Classifier):
         how small the error function descrease can get before the learning is stopped early
     """
 
-    def __init__(self, train, valid, test, hiddenLayers, outputDim, learningRate=0.1, epochs=50):
+    def __init__(self, train, valid, test, hiddenLayers, outputDim, learningRate=0.1, epochs=30):
         self.learningRate = learningRate
         self.epochs = epochs
-        self.errorDeltaThreshold = 0.3 # 0.0001
+        self.errorDeltaThreshold = 3
 
         self.trainingSet = train
         self.validationSet = valid
         self.testSet = test
-        
+
         # Initialize layers
         self.layers = []
         self.size = len(hiddenLayers) + 1
-        
+
         # Create hidden layers
+        maxInitWeightOfInputLayer = 2.0 / 784.0 # Input layer receives 784 inputs averaging at 0.5; their weighted sum must still be within sigmoid's effective range
+        print maxInitWeightOfInputLayer
         previousLayerSize = self.trainingSet.input.shape[1]
         for layerSize in hiddenLayers:
-            self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=0.02))
+            self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=maxInitWeightOfInputLayer))
             previousLayerSize = layerSize
         # Create output layer
         self.layers.append(Layer(nIn = previousLayerSize, nOut = outputDim, activation='softmax'))
-        
+
         # Cross-link each layer except the output (which obviously has no downstream) to the respective downstream layer
         for i in xrange(self.size - 1):
             self.layers[i].setDownstream(self.layers[i+1])
 
-    def train(self):
-        """Train the Multilayer perceptron"""
+    def train(self, dynamicLearningRate=True, miniBatchSize=100):
+        """Train the Multilayer perceptron
+        Parameters
+        ----------
+        dynamicLearningRate : boolean
+        miniBatchSize : positive int
+        """
         from util.loss_functions import CrossEntropyError
         loss = CrossEntropyError()
 
@@ -76,37 +83,41 @@ class MultilayerPerceptron(Classifier):
         iteration = 0
         prevError = 1000000
         currentLearningRate = self.learningRate
-            
+
         # Preprocessing for performance reasons
         validationOutputs = map(self.convertLabelToFlags, self.validationSet.label)
-        
+        labeledInputs = zip(self.trainingSet.input, self.trainingSet.label)
+
         while not learned:
             iteration += 1
-            currentLearningRate -= self.learningRate * (iteration - 1) / self.epochs
-            batchSize = 1 if iteration == 1 else len(self.trainingSet.label) / 10
-            
-            currentBatchCount = 0
+            currentBatchCount = 1
             # Update the weights from each input in the training set
-            for input, label in zip(self.trainingSet.input, self.trainingSet.label):
+            for input, label in labeledInputs:
+                # Calculate the outputs (stored within the layer objects themselves) and backpropagate the errors
                 self.fire(input)
-                self.learn(self.convertLabelToFlags(label), currentLearningRate)
-                
-                currentBatchCount += 1
-                if currentBatchCount >= batchSize:
-                    self.updateAllWeights()
+                self.learn(self.convertLabelToFlags(label))
+                # Minibatch handling
+                if iteration <= 1 or currentBatchCount >= miniBatchSize: # The first iteration is always stochastic gradient descent, so it converges faster
+                    self.updateAllWeights(currentLearningRate)
                     currentBatchCount = 0
-            self.updateAllWeights()
+                else:
+                    currentBatchCount += 1
+            # Apply the last weight update in case the last batch was too short
+            self.updateAllWeights(currentLearningRate)
+
+            # Dynamic learning rate handling
+            if dynamicLearningRate:
+                currentLearningRate -= self.learningRate * 1 / self.epochs
 
             # Calculate the total error function in the validation set with current weights
             error = sum(map(loss.calculateError, validationOutputs, map(self.fire, self.validationSet.input)))
-            
             # Exit if error stops decreasing significantly or starts increasing again or max epochs reached
-            if iteration >= self.epochs or (prevError - error) < self.errorDeltaThreshold:
+            if iteration >= self.epochs or (prevError - error) < self.errorDeltaThreshold: # or error < 850.0:
                 learned = True
             prevError = error # Update the error value for the next iteration
-    
+
             logging.info("Iteration: %2i; Error: %9.4f", iteration, error)
-            
+
     def convertLabelToFlags(self, label):
         """Convert a label to an MLP output array
 
@@ -122,7 +133,7 @@ class MultilayerPerceptron(Classifier):
         result = [0.0] * 10
         result[int(label)] = 1.0
         return result
-        
+
     def classify(self, testInstance):
         """Classify a single instance.
 
@@ -170,8 +181,8 @@ class MultilayerPerceptron(Classifier):
             # Pass calculated layer output with the input plus bias
             prevLayerOutput = layer.forward(np.append(prevLayerOutput, 1))
         return prevLayerOutput
-    
-    def learn(self, targetOutput, learningRate):
+
+    def learn(self, targetOutput):
         """Backpropagate the error through all layers.
         This method does not return anything and only updates the cumulativeWeightsUpdate attribute of each layer.
         updateAllWeights() has to be called to actually update the weights in the layers.
@@ -181,16 +192,16 @@ class MultilayerPerceptron(Classifier):
         targetOutput : list of floats
         """
         # Go from the TOP of the layer stack and backpropagate the error
-        downstreamSigmas = None
+        downstreamDeltas = None
         for layer in reversed(self.layers):
-            if downstreamSigmas is None: # i.e. this is the output (highest) layer
-                downstreamSigmas = layer.backward(learningRate, targetOutput=targetOutput)
+            if downstreamDeltas is None: # i.e. this is the output (highest) layer
+                downstreamDeltas = layer.backward(targetOutput=targetOutput)
             else: # i.e. this is a hidden layer
-                downstreamSigmas = layer.backward(learningRate, downstreamSigmas=downstreamSigmas)
-                
-    def updateAllWeights(self):
+                downstreamDeltas = layer.backward(downstreamDeltas=downstreamDeltas)
+
+    def updateAllWeights(self, learningRate):
         """
         Updates all weights in all layers of the MLP, using the data stored in the cumulativeWeightsUpdate attribute of each layer.
         """
         for layer in self.layers:
-            layer.updateWeights()
+            layer.updateWeights(learningRate)

@@ -9,14 +9,14 @@ __email__ = "mikhail.aristov@student.kit.edu"
 class Layer(object):
     """
     A layer of perceptrons
-    
+
     Parameters
     ----------
     nIn: int: number of units from the previous layer (or input data)
     nOut: int: number of units of the current layer (or output)
     activation: string: activation function of every units in the layer
     maxInitWeight: float: highest initial (random) weight in the layer
-    
+
     Attributes
     ----------
     nIn : positive int:
@@ -59,7 +59,7 @@ class Layer(object):
         self.downstream = None
 
         self.nIn = nIn
-        self.nOut = nOut        
+        self.nOut = nOut
 
         # You can have better initialization here
         if weights is None:
@@ -77,7 +77,7 @@ class Layer(object):
         self.shape = self.weights.shape
         # Some performance optimization
         self.transposedWeights = self.weights.transpose()
-        # Runtime variables
+        # Storage variables for backpropagation
         self.lastInput = None
         self.lastOutput = None
         self.lastOutputDerivatives = None
@@ -101,52 +101,64 @@ class Layer(object):
         # Apply the activation function
         self.lastOutput = self.activation(netOutput)
         # Apply the derivative activation function for gradient descent
-        self.lastOutputDerivatives = self.activation(netOutput)
+        self.lastOutputDerivatives = self.derivative(netOutput)
         return self.lastOutput
 
-    def backward(self, learningRate, targetOutput=None, downstreamSigmas=None):
+    def backward(self, targetOutput=None, downstreamDeltas=None):
         """
-        TODO: Documentation
+        Backpropagates the error from downstream through the layer and stores the cumulative weight updates.
+        Parameters
+        ----------
+        targetOutput : ndarray
+            a numpy array (1,nOut) containing the target out of the layer (output layer ONLY!)
+        downstreamDeltas : ndarray
+            a numpy array (1,nOut) containing the deltas out of the downstream layer (hidden layers ONLY!)
+        Returns
+        -------
+        ndarray :
+            a numpy array (1,nOut) containing the deltas of the current layer, to be passed upstream
         """
-        # Calculate the sigmas for the weight update, either based on expected output, or on the downstream sigmas
+        # Calculate the deltas for the weight update, either based on expected output, or on the downstream deltas
         if self.downstream is None and targetOutput is not None: # i.e. this is the output layer
-            sigmas = targetOutput - self.lastOutput # TODO: Generalize, not just cross entropy derivative
-        elif self.downstream is not None and downstreamSigmas is not None: # i.e. this is one of the hidden layers
-            # Downstream factors := downstream sigmas x downstream weights (in this network design, the downstream is the complete layer above)
+            deltas = targetOutput - self.lastOutput # TODO: Generalize, not just cross entropy derivative
+        elif self.downstream is not None and downstreamDeltas is not None: # i.e. this is one of the hidden layers
+            # Downstream factors := downstream deltas x downstream weights (in this network design, the downstream is the complete layer above)
             # Note that the last weight of each downstream neuron is the bias weight, which doesn't influence this layer's weights, so it is filtered out
-            downstreamFactors = np.dot(downstreamSigmas, self.downstream.weights[:,:-1])
-            # Multiply this layer's derivative functions with the downstream's correction factors to get this layer's sigmas
-            sigmas = np.multiply(downstreamFactors, self.lastOutputDerivatives)
+            downstreamFactors = np.dot(downstreamDeltas, self.downstream.weights[:,:-1])
+            # Multiply this layer's derivative functions with the downstream's correction factors to get this layer's deltas
+            deltas = np.multiply(downstreamFactors, self.lastOutputDerivatives)
         else:
-            raise ValueError("Target output must be specified for the output layer and downstream sigmas, for all hidden layers!")
-        
+            raise ValueError("Target output must be specified for the output layer and downstream deltas, for all hidden layers!")
+
         # Update the weights update matrix (actual weights are updated in by the updateWeights() method (to enable batch learning)
-        self.cumulativeWeightsUpdate += learningRate * np.dot(np.matrix(sigmas).transpose(), self.lastInput)
+        self.cumulativeWeightsUpdate += np.dot(np.matrix(deltas).transpose(), self.lastInput) # Tensor product!
         self.learningIterationCounter += 1.0
-        # Return the current layer's sigmas to be propagated upstream
-        return sigmas
-    
-    def updateWeights(self):
+        # Return the current layer's deltas to be propagated upstream
+        return deltas
+
+    def updateWeights(self, learningRate):
         """
         Update weights with the current cumulative update values.
         If called immediately after backward(), amounts to stochastic gradient descent, otherwise enables (mini-)batch GD
+        Parameters
+        ----------
+        learningRate : positive float
         """
         if self.learningIterationCounter > 0.0:
-            self.weights += 1.0 / self.learningIterationCounter * self.cumulativeWeightsUpdate
+            self.weights += (learningRate / self.learningIterationCounter) * self.cumulativeWeightsUpdate
             self.cumulativeWeightsUpdate.fill(0.0) # Reset the update values
             self.learningIterationCounter = 0.0  # Reset the updates counter
             self.transposedWeights = self.weights.transpose() # Performance
-    
+
     def setDownstream(self, layer):
         """
         Set the pointer to the downstream layer.
         Parameters
         ----------
-        deltas : layer
+        layer : layer
             pointer to the downstream layer
         """
         if type(layer) is type(self):
             self.downstream = layer
         else:
             raise TypeError("Downstream must be a layer!")
-        
