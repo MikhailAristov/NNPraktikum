@@ -4,6 +4,7 @@ import logging
 import numpy as np
 from model.classifier import Classifier
 from model.layer import Layer
+from copy import deepcopy
 
 __author__ = "Mikhail Aristov"
 __email__ = "mikhail.aristov@student.kit.edu"
@@ -40,9 +41,10 @@ class MultilayerPerceptron(Classifier):
     layers : list of layer objects
     size : positive int
         total number of layers
+    bestConfig : copy of layers
     """
 
-    def __init__(self, train, valid, test, outputDim, layerWeights=[], randomLayers=[], learningRate=0.1, epochs=100):
+    def __init__(self, train, valid, test, outputDim, layerWeights=[], randomLayers=[], learningRate=0.1, epochs=150):
         self.learningRate = learningRate
         self.epochs = epochs
 
@@ -59,7 +61,7 @@ class MultilayerPerceptron(Classifier):
         # Append fixed layers, if any
         for predefinedLayerWeight in layerWeights:
             if len(predefinedLayerWeight[0]) == previousLayerSize + 1: # +1 for bias
-                self.layers.append(Layer(nIn = previousLayerSize, nOut = len(predefinedLayerWeight), activation='sigmoid', weights=predefinedLayerWeight, frozen=True))
+                self.layers.append(Layer(nIn = previousLayerSize, nOut = len(predefinedLayerWeight), activation='sigmoid', weights=predefinedLayerWeight, frozen=False))
                 previousLayerSize = len(predefinedLayerWeight)
             else:
                 raise ValueError("Layer size mismatch!")
@@ -69,12 +71,13 @@ class MultilayerPerceptron(Classifier):
             previousLayerSize = layerSize
         # Create output layer
         self.layers.append(Layer(nIn = previousLayerSize, nOut = outputDim, activation='softmax'))
-
+        self.bestConfig = None
+        
         # Cross-link each layer except the output (which obviously has no downstream) to the respective downstream layer
         for i in xrange(self.size - 1):
             self.layers[i].setDownstream(self.layers[i+1])
 
-    def train(self, errorThreshold=650.0, errorDeltaThreshold=0.01, miniBatchSize=100, weightDecay=0.0001, momentum=0.7):
+    def train(self, errorThreshold=550.0, errorDeltaThreshold=0.01, miniBatchSize=100, weightDecay=0.0001, momentum=0.7, randomNoise=0.05):
         """Train the Multilayer perceptron
         Parameters
         ----------
@@ -85,13 +88,17 @@ class MultilayerPerceptron(Classifier):
         miniBatchSize : positive int
         weightDecay : positive float
         momentum : positive float
+        randomNoise : positive float
+            portion of the input to randomly set to zeroes in each layer
         """
         from util.loss_functions import CrossEntropyError
         loss = CrossEntropyError()
 
         learned = False
+        strikes = 0
         iteration = 0
         prevError = 1000000
+        minError = prevError
 
         # Preprocessing for performance reasons
         validationOutputs = map(self.convertLabelToFlags, self.validationSet.label)
@@ -103,7 +110,7 @@ class MultilayerPerceptron(Classifier):
             # Update the weights from each input in the training set
             for input, label in labeledInputs:
                 # Calculate the outputs (stored within the layer objects themselves) and backpropagate the errors
-                self.fire(input, randomNoise=0.3)
+                self.fire(input, randomNoise)
                 self.learn(self.convertLabelToFlags(label))
                 # Minibatch handling
                 if iteration <= 1 or currentBatchCount >= miniBatchSize: # The first iteration is always stochastic gradient descent, so it converges faster
@@ -117,12 +124,26 @@ class MultilayerPerceptron(Classifier):
             # Calculate the total error function in the validation set with current weights
             error = sum(map(loss.calculateError, validationOutputs, map(self.fire, self.validationSet.input)))
             errorDelta = prevError - error
+            # Save current configuration if it is the best so far
+            if error < minError:
+                self.bestConfig = deepcopy(self.layers)
+                minError = error
             # Exit if error stops decreasing significantly or starts increasing again or max epochs reached
-            if iteration >= self.epochs or (error < errorThreshold and errorDelta < 2.0 * errorDeltaThreshold) or errorDelta < errorDeltaThreshold:
+            if iteration >= self.epochs:
                 learned = True
+            elif (error < errorThreshold and errorDelta < 2.0 * errorDeltaThreshold) or errorDelta < errorDeltaThreshold:
+                if strikes < 3 and randomNoise > 0.0: # Use the three-strikes system only if random noise is applied, otherwise stop learning immediately
+                    strikes += 1
+                else:
+                    learned = True
+            else:
+                strikes = 0 if strikes == 0 else strikes - 1
             prevError = error # Update the error value for the next iteration
 
             logging.info("Iteration: %2i; Error: %9.4f", iteration, error)
+        
+        # Restore best config from backup
+        self.layers = self.bestConfig
 
     def convertLabelToFlags(self, label):
         """Convert a label to an MLP output array
@@ -177,6 +198,8 @@ class MultilayerPerceptron(Classifier):
         Parameters
         ----------
         input : list of floats
+        randomNoise : positive float
+            portion of the input to randomly set to zeroes in each layer
 
         Returns
         -------

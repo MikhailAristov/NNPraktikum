@@ -54,21 +54,19 @@ class DenoisingAutoencoder(Autoencoder):
 
         # Create hidden layers
         previousLayerSize = self.trainingSet.input.shape[1]
-        maxInitLayerWeight = 4.0 / 7840.0
         # Append fixed layers, if any
         for predefinedLayerWeight in layerWeights:
             if len(predefinedLayerWeight[0]) == previousLayerSize + 1: # +1 for bias
-                self.layers.append(Layer(nIn = previousLayerSize, nOut = len(predefinedLayerWeight), activation='sigmoid', weights=predefinedLayerWeight))
+                self.layers.append(Layer(nIn = previousLayerSize, nOut = len(predefinedLayerWeight), activation='sigmoid', weights=predefinedLayerWeight, frozen=True))
                 previousLayerSize = len(predefinedLayerWeight)
             else:
                 raise ValueError("Layer size mismatch!")
         # Append random layers, if any
         for layerSize in randomLayers:
-            # Input layer receives 784 inputs averaging at 0.5; their weighted sum must still be within sigmoid's effective range
-            self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=maxInitLayerWeight))
+            self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=0.0005))
             previousLayerSize = layerSize
         # Create output layer
-        self.layers.append(Layer(nIn = previousLayerSize, nOut = self.trainingSet.input.shape[1], activation='sigmoid', maxInitWeight=maxInitLayerWeight))
+        self.layers.append(Layer(nIn = previousLayerSize, nOut = self.trainingSet.input.shape[1], activation='sigmoid', maxInitWeight=0.0005))
 
         # Cross-link each layer except the output (which obviously has no downstream) to the respective downstream layer
         for i in xrange(self.size - 1):
@@ -101,17 +99,16 @@ class DenoisingAutoencoder(Autoencoder):
             # Update the weights from each input in the training set
             for input in self.trainingSet.input:
                 # Calculate the outputs (stored within the layer objects themselves) and backpropagate the errors
-                self.fire(self.mask(input, maskSize))
+                self.fire(input, maskSize)
                 self.learn(input)
-                
                 # Minibatch handling
                 if iteration <= 1 or currentBatchCount >= miniBatchSize: # The first iteration is always stochastic gradient descent, so it converges faster
-                    self.updateAllWeights(self.learningRate, weightDecay, momentum)
+                    self.updateAllWeights(self.learningRate, weightDecay, momentum if iteration > 1 else 0.0)
                     currentBatchCount = 0
                 else:
                     currentBatchCount += 1
             # Apply the last weight update in case the last batch was too short
-            self.updateAllWeights(self.learningRate, weightDecay, momentum)
+            self.updateAllWeights(self.learningRate, weightDecay, momentum if iteration > 1 else 0.0)
 
             # Calculate the total error function in the validation set with current weights
             error = sum(map(loss.calculateError, self.validationSet.input, map(self.fire, self.validationSet.input)))
@@ -122,33 +119,26 @@ class DenoisingAutoencoder(Autoencoder):
             prevError = error # Update the error value for the next iteration
 
             logging.info("Iteration: %2i; Error: %9.4f", iteration, error)
-    
-    def mask(self, input, portion):
-        # Calculate the exact number of input features to mask
-        maskedCount = int(portion * len(input))
-        # Randomly select this many features
-        maskedFeatures = np.random.choice(range(len(input)),maskedCount)
-        # Set the values of masked features to zero
-        maskedInput = np.array(input)
-        for i in maskedFeatures:
-            maskedInput[i] = 0.0
-        return maskedInput
-    
-    def fire(self, input):
+
+    def fire(self, input, maskSize=0.0):
         """Calculate the raw MLP result of an input
 
         Parameters
         ----------
         input : list of floats
+        maskSize : positive float
+            portion of the input to mask
 
         Returns
         -------
         list of floats
         """
+        currentMaskSize = maskSize
         prevLayerOutput = input
         for layer in self.layers:
             # Pass calculated layer output with the input plus bias
-            prevLayerOutput = layer.forward(np.append(prevLayerOutput, 1))
+            prevLayerOutput = layer.forward(np.append(prevLayerOutput, 1), currentMaskSize)
+            currentMaskSize = 0.0 # Only apply masking to the input layer
         return prevLayerOutput
 
     def learn(self, targetOutput):
@@ -165,8 +155,10 @@ class DenoisingAutoencoder(Autoencoder):
         for layer in reversed(self.layers):
             if downstreamDeltas is None: # i.e. this is the output (highest) layer
                 downstreamDeltas = layer.backward(targetOutput=targetOutput, errorFunction = 'MeanSquaredError')
-            else: # i.e. this is a hidden layer
+            elif not layer.frozen: # i.e. this is a hidden layer
                 downstreamDeltas = layer.backward(downstreamDeltas=downstreamDeltas)
+            else: # Stop calculation upon encountering the first frozen layer
+                break
 
     def updateAllWeights(self, learningRate, weightDecay, momentum):
         """

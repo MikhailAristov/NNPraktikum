@@ -94,22 +94,37 @@ class Layer(object):
         ----------
         input : ndarray
             a numpy array (1,nIn + 1) containing the input of the layer
+        randomNoise : positive float
+            the portion of the input to be randomly replaced with zeroes
         Returns
         -------
         ndarray :
             a numpy array (1,nOut) containing the output of the layer
         """
         # Save the last input
-        self.lastInput = np.matrix(self.mask(input, randomNoise))
+        maskedInput = self.mask(input, randomNoise)
+        self.lastInput = np.matrix(maskedInput)
         # Calculate the net output of the neuron
-        netOutput = np.dot(input, self.transposedWeights)
+        netOutput = np.dot(maskedInput, self.transposedWeights)
         # Apply the activation function
         self.lastOutput = self.activation(netOutput)
         # Apply the derivative activation function for gradient descent
         self.lastOutputDerivatives = self.derivative(netOutput)
         return self.lastOutput
-    
-    def mask(self, input, portion):
+
+    @staticmethod
+    def mask(input, portion):
+        """
+        Randomly sets a specified portion of the input to zeroes and returns it.
+        Parameters
+        ----------
+        input : ndarray
+        portion : positive float
+            the portion of input to mask (0.01 = 1%, 1.0 = 100%)
+        Returns
+        -------
+        ndarray
+        """
         # Calculate the exact number of input features to mask
         maskedCount = int(portion * len(input))
         # Randomly select this many features

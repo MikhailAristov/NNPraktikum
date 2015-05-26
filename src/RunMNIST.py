@@ -51,6 +51,12 @@ def main():
 
     # eval.printConfusionMatrix(data.testSet, pred)
     # eval.printClassificationResult(data.testSet, pred, target_names)
+    """
+    # Save the resulting MLP for posterity
+    myMLPClassifier.layers[0].saveToFile("../data/mlp2_features_layer_80.gz")
+    myMLPClassifier.layers[1].saveToFile("../data/mlp2_recognize_layer_40.gz")
+    myMLPClassifier.layers[2].saveToFile("../data/mlp2_output_layer_10.gz")
+    """
 
 if __name__ == '__main__':
     main()
