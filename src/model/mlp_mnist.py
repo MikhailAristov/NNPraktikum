@@ -44,7 +44,7 @@ class MultilayerPerceptron(Classifier):
     bestConfig : copy of layers
     """
 
-    def __init__(self, train, valid, test, outputDim, layerWeights=[], randomLayers=[], learningRate=0.1, epochs=150):
+    def __init__(self, train, valid, test, outputDim, layerWeights=[], randomLayers=[], outputLayer=None, learningRate=0.1, epochs=150):
         self.learningRate = learningRate
         self.epochs = epochs
 
@@ -55,6 +55,7 @@ class MultilayerPerceptron(Classifier):
         # Initialize layers
         self.layers = []
         self.size = len(layerWeights) + len(randomLayers) + 1
+        self.bestConfig = None
 
         # Create hidden layers
         previousLayerSize = self.trainingSet.input.shape[1]
@@ -70,14 +71,19 @@ class MultilayerPerceptron(Classifier):
             self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=0.0005))
             previousLayerSize = layerSize
         # Create output layer
-        self.layers.append(Layer(nIn = previousLayerSize, nOut = outputDim, activation='softmax'))
-        self.bestConfig = None
+        if outputLayer is not None:
+            if len(outputLayer[0]) == previousLayerSize + 1 and len(outputLayer) == outputDim:
+                self.layers.append(Layer(nIn = previousLayerSize, nOut = outputDim, weights=outputLayer, activation='softmax'))
+            else:
+                raise ValueError("Layer size mismatch!")
+        else:
+            self.layers.append(Layer(nIn = previousLayerSize, nOut = outputDim, activation='softmax'))
         
         # Cross-link each layer except the output (which obviously has no downstream) to the respective downstream layer
         for i in xrange(self.size - 1):
             self.layers[i].setDownstream(self.layers[i+1])
 
-    def train(self, errorThreshold=550.0, errorDeltaThreshold=0.01, miniBatchSize=100, weightDecay=0.0001, momentum=0.7, randomNoise=0.05):
+    def train(self, errorThreshold=550.0, errorDeltaThreshold=0.01, miniBatchSize=100, weightDecay=0.0001, momentum=0.7, dropout=0.05):
         """Train the Multilayer perceptron
         Parameters
         ----------
@@ -88,7 +94,7 @@ class MultilayerPerceptron(Classifier):
         miniBatchSize : positive int
         weightDecay : positive float
         momentum : positive float
-        randomNoise : positive float
+        dropout : positive float
             portion of the input to randomly set to zeroes in each layer
         """
         from util.loss_functions import CrossEntropyError
@@ -110,7 +116,7 @@ class MultilayerPerceptron(Classifier):
             # Update the weights from each input in the training set
             for input, label in labeledInputs:
                 # Calculate the outputs (stored within the layer objects themselves) and backpropagate the errors
-                self.fire(input, randomNoise)
+                self.fire(input, dropout)
                 self.learn(self.convertLabelToFlags(label))
                 # Minibatch handling
                 if iteration <= 1 or currentBatchCount >= miniBatchSize: # The first iteration is always stochastic gradient descent, so it converges faster
@@ -132,7 +138,7 @@ class MultilayerPerceptron(Classifier):
             if iteration >= self.epochs:
                 learned = True
             elif (error < errorThreshold and errorDelta < 2.0 * errorDeltaThreshold) or errorDelta < errorDeltaThreshold:
-                if strikes < 3 and randomNoise > 0.0: # Use the three-strikes system only if random noise is applied, otherwise stop learning immediately
+                if strikes < 3 and dropout > 0.0: # Use the three-strikes system only if random noise is applied, otherwise stop learning immediately
                     strikes += 1
                 else:
                     learned = True
@@ -192,13 +198,13 @@ class MultilayerPerceptron(Classifier):
             test = self.testSet.input
         return list(map(self.classify, test))
 
-    def fire(self, input, randomNoise=0.0):
+    def fire(self, input, dropout=0.0):
         """Calculate the raw MLP result of an input
 
         Parameters
         ----------
         input : list of floats
-        randomNoise : positive float
+        dropout : positive float
             portion of the input to randomly set to zeroes in each layer
 
         Returns
@@ -208,7 +214,7 @@ class MultilayerPerceptron(Classifier):
         prevLayerOutput = input
         for layer in self.layers:
             # Pass calculated layer output with the input plus bias
-            prevLayerOutput = layer.forward(np.append(prevLayerOutput, 1), randomNoise)
+            prevLayerOutput = layer.forward(np.append(prevLayerOutput, 1), dropout)
         return prevLayerOutput
 
     def learn(self, targetOutput):

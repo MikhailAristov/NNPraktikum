@@ -87,14 +87,14 @@ class Layer(object):
         self.lastWeightUpdate = np.ndarray(self.weights.shape)
         self.lastWeightUpdate.fill(0.0)
 
-    def forward(self, input, randomNoise=0.0):
+    def forward(self, input, dropout=0.0):
         """
         Compute forward step over the input using its weights
         Parameters
         ----------
         input : ndarray
             a numpy array (1,nIn + 1) containing the input of the layer
-        randomNoise : positive float
+        dropout : positive float
             the portion of the input to be randomly replaced with zeroes
         Returns
         -------
@@ -102,30 +102,30 @@ class Layer(object):
             a numpy array (1,nOut) containing the output of the layer
         """
         # Save the last input
-        maskedInput = self.mask(input, randomNoise)
+        maskedInput = self.dropout(input, dropout)
         self.lastInput = np.matrix(maskedInput)
         # Calculate the net output of the neuron
         netOutput = np.dot(maskedInput, self.transposedWeights)
         # Apply the activation function
-        self.lastOutput = self.activation(netOutput)
+        self.lastOutput = np.array(self.activation(netOutput))
         # Apply the derivative activation function for gradient descent
-        self.lastOutputDerivatives = self.derivative(netOutput)
+        self.lastOutputDerivatives = np.array(self.derivative(netOutput))
         return self.lastOutput
 
     @staticmethod
-    def mask(input, portion):
+    def dropout(input, portion):
         """
         Randomly sets a specified portion of the input to zeroes and returns it.
         Parameters
         ----------
         input : ndarray
         portion : positive float
-            the portion of input to mask (0.01 = 1%, 1.0 = 100%)
+            the portion of input to drop out (0.01 = 1%, 1.0 = 100%)
         Returns
         -------
         ndarray
         """
-        # Calculate the exact number of input features to mask
+        # Calculate the exact number of input features to dropout
         maskedCount = int(portion * len(input))
         # Randomly select this many features
         maskedFeatures = np.random.choice(range(len(input)),maskedCount)
@@ -135,7 +135,7 @@ class Layer(object):
             maskedInput[i] = 0.0
         return maskedInput
 
-    def backward(self, targetOutput=None, downstreamDeltas=None, errorFunction=None):
+    def backward(self, targetOutput=None, downstreamDeltas=None, errorFunction='MeanSquaredError'):
         """
         Backpropagates the error from downstream through the layer and stores the cumulative weight updates.
         Parameters
@@ -151,10 +151,11 @@ class Layer(object):
         """
         # Calculate the deltas for the weight update, either based on expected output, or on the downstream deltas
         if self.downstream is None and targetOutput is not None: # i.e. this is the output layer
+            # Calculate deltas
             if(errorFunction == 'CrossEntropyError'):
                 deltas = targetOutput - self.lastOutput
             elif(errorFunction == 'MeanSquaredError'):
-                deltas = map(lambda t, o: (t - o) * o * (1 - o), targetOutput, self.lastOutput)
+                deltas = (targetOutput - self.lastOutput) * self.lastOutput * (1 - self.lastOutput) # lastOutput is an np.array, so it supports this type of operation
             else:
                 raise ValueError("No valid error function specified")
         elif self.downstream is not None and downstreamDeltas is not None: # i.e. this is one of the hidden layers
