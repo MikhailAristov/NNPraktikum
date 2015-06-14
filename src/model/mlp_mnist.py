@@ -105,6 +105,7 @@ class MultilayerPerceptron(Classifier):
         iteration = 0
         prevError = 1000000
         minError = prevError
+        currentMomentum = momentum
 
         # Preprocessing for performance reasons
         validationOutputs = map(self.convertLabelToFlags, self.validationSet.label)
@@ -113,6 +114,7 @@ class MultilayerPerceptron(Classifier):
         while not learned:
             iteration += 1
             currentBatchCount = 1
+            currentMomentum = currentMomentum * 1.1 # Increase the momentum with every iteration
             # Update the weights from each input in the training set
             for input, label in labeledInputs:
                 # Calculate the outputs (stored within the layer objects themselves) and backpropagate the errors
@@ -226,6 +228,8 @@ class MultilayerPerceptron(Classifier):
         ----------
         targetOutput : list of floats
         """
+        # Only backpropagate if the error is big enough
+        
         # Go from the TOP of the layer stack and backpropagate the error
         downstreamDeltas = None
         for layer in reversed(self.layers):

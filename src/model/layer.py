@@ -47,7 +47,7 @@ class Layer(object):
         last input to the layer, stored for backpropagation
     lastOutput : ndarray
         last output of the layer, stored for backpropagation
-    lastOutputDerivatives : ndarray
+    lastGradient : ndarray
         derivatives of the last output, stored for backpropagation
     """
 
@@ -83,7 +83,7 @@ class Layer(object):
         # Storage variables for backpropagation
         self.lastInput = None
         self.lastOutput = None
-        self.lastOutputDerivatives = None
+        self.lastGradient = None
         self.lastWeightUpdate = np.ndarray(self.weights.shape)
         self.lastWeightUpdate.fill(0.0)
 
@@ -109,7 +109,7 @@ class Layer(object):
         # Apply the activation function
         self.lastOutput = np.array(self.activation(netOutput))
         # Apply the derivative activation function for gradient descent
-        self.lastOutputDerivatives = np.array(self.derivative(netOutput))
+        self.lastGradient = np.array(self.derivative(netOutput))
         return self.lastOutput
 
     @staticmethod
@@ -162,8 +162,8 @@ class Layer(object):
             # Downstream factors := downstream deltas x downstream weights (in this network design, the downstream is the complete layer above)
             # Note that the last weight of each downstream neuron is the bias weight, which doesn't influence this layer's weights, so it is filtered out
             downstreamFactors = np.dot(downstreamDeltas, self.downstream.weights[:,:-1])
-            # Multiply this layer's derivative functions with the downstream's correction factors to get this layer's deltas
-            deltas = np.multiply(downstreamFactors, self.lastOutputDerivatives)
+            # Multiply this layer's gradients with the downstream's correction factors to get this layer's deltas
+            deltas = np.multiply(downstreamFactors, self.lastGradient)
         else:
             raise ValueError("Target output must be specified for the output layer and downstream deltas, for all hidden layers!")
 

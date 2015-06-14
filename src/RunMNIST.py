@@ -15,8 +15,8 @@ def main():
     myMLPClassifier = MultilayerPerceptron(data.trainingSet,
                                            data.validationSet,
                                            data.testSet,
-                                           layerWeights=[Layer.loadFromFile("../data/features_layer_80.gz")],
-                                           randomLayers=[40],
+                                           layerWeights=[Layer.loadFromFile("../data/features_layer_151.gz")],
+                                           randomLayers=[75],
                                            outputDim=10)
     # Train the classifiers
     print("=========================")

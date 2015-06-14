@@ -54,6 +54,7 @@ class DenoisingAutoencoder(Autoencoder):
 
         # Create hidden layers
         previousLayerSize = self.trainingSet.input.shape[1]
+        maxInitWeight = (2.0 * self.trainingSet.input.shape[1]) ** -0.5 # maxWeight = 1 / sqrt(nIn + nOut)
         # Append fixed layers, if any
         for predefinedLayerWeight in layerWeights:
             if len(predefinedLayerWeight[0]) == previousLayerSize + 1: # +1 for bias
@@ -63,16 +64,16 @@ class DenoisingAutoencoder(Autoencoder):
                 raise ValueError("Layer size mismatch!")
         # Append random layers, if any
         for layerSize in randomLayers:
-            self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=0.0005))
+            self.layers.append(Layer(nIn = previousLayerSize, nOut = layerSize, activation='sigmoid', maxInitWeight=maxInitWeight))
             previousLayerSize = layerSize
         # Create output layer
-        self.layers.append(Layer(nIn = previousLayerSize, nOut = self.trainingSet.input.shape[1], activation='sigmoid', maxInitWeight=0.0005))
+        self.layers.append(Layer(nIn = previousLayerSize, nOut = self.trainingSet.input.shape[1], activation='sigmoid', maxInitWeight=maxInitWeight))
 
         # Cross-link each layer except the output (which obviously has no downstream) to the respective downstream layer
         for i in xrange(self.size - 1):
             self.layers[i].setDownstream(self.layers[i+1])
 
-    def train(self, maskSize=0.1, errorThreshold=0.0, errorDeltaThreshold=0.01, miniBatchSize=100, weightDecay=0.0, momentum=0.0):
+    def train(self, maskSize=0.1, errorThreshold=0.0, errorDeltaThreshold=0.01, backpropErrorThreshold = 0.005, miniBatchSize=100, weightDecay=0.0, momentum=0.0):
         """Train the denoiser autoencoder
         Parameters
         ----------
@@ -98,9 +99,11 @@ class DenoisingAutoencoder(Autoencoder):
             currentBatchCount = 1
             # Update the weights from each input in the training set
             for input in self.trainingSet.input:
-                # Calculate the outputs (stored within the layer objects themselves) and backpropagate the errors
+                # Calculate the outputs (stored within the layer objects themselves)
                 self.fire(input, maskSize)
-                self.learn(input)
+                # Backpropagate the error only if it is big enough
+                if loss.calculateError(input, self.layers[-1].lastOutput) > backpropErrorThreshold:
+                    self.learn(input)
                 # Minibatch handling
                 if iteration <= 1 or currentBatchCount >= miniBatchSize: # The first iteration is always stochastic gradient descent, so it converges faster
                     self.updateAllWeights(self.learningRate, weightDecay, momentum if iteration > 1 else 0.0)
@@ -149,7 +152,7 @@ class DenoisingAutoencoder(Autoencoder):
         Parameters
         ----------
         targetOutput : list of floats
-        """
+        """               
         # Go from the TOP of the layer stack and backpropagate the error
         downstreamDeltas = None
         for layer in reversed(self.layers):

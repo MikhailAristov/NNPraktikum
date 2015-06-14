@@ -6,10 +6,12 @@ from model.denoiser import DenoisingAutoencoder
 
 def main():
     data = MNISTSeven("../data/mnist_seven.csv", 3000, 1000, 1000, oneHot=False)
+    # The encoding layer should have as many neurons, as there are, on average, non-zero inputs in each training data set
+    featuresLayerSize = int(data.nonZeroDataPoints / 5000) # = 151
     myDenoiser = DenoisingAutoencoder(data.trainingSet,
                                       data.validationSet,
                                       data.testSet,
-                                      randomLayers=[80]
+                                      randomLayers=[featuresLayerSize]
                                       )
     # Train the classifiers
     print("=========================")
@@ -19,7 +21,7 @@ def main():
     myDenoiser.train()
     print("Done..")
     
-    myDenoiser.layers[0].saveToFile("../data/features_layer_80.gz")
+    myDenoiser.layers[0].saveToFile("../data/features_layer_" + str(featuresLayerSize) + ".gz")
 
 if __name__ == '__main__':
     main()

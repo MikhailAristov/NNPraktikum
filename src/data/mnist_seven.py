@@ -19,6 +19,8 @@ class MNISTSeven(object):
         Number of validation examples.
     numTest : int
         Number of test examples.
+    nonZeroDataPoints : int
+        How many inputs in the MNIST data are NOT equal zero
 
     Attributes
     ----------
@@ -34,6 +36,7 @@ class MNISTSeven(object):
         self.trainingSet = []
         self.validationSet = []
         self.testSet = []
+        self.nonZeroDataPoints = 0
 
         self.load(dataPath, numTrain, numValid, numTest, oneHot=oneHot)
 
@@ -52,5 +55,6 @@ class MNISTSeven(object):
         self.trainingSet = DataSet(train, oneHot=oneHot)
         self.validationSet = DataSet(valid, oneHot=oneHot)
         self.testSet = DataSet(test, oneHot=oneHot)
+        self.nonZeroDataPoints = np.count_nonzero(data)
 
         print("Data loaded.")
