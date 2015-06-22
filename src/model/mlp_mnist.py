@@ -83,7 +83,7 @@ class MultilayerPerceptron(Classifier):
         for i in xrange(self.size - 1):
             self.layers[i].setDownstream(self.layers[i+1])
 
-    def train(self, errorThreshold=550.0, errorDeltaThreshold=0.01, miniBatchSize=100, weightDecay=0.0001, momentum=0.7, dropout=0.05):
+    def train(self, errorThreshold=4.0, errorDeltaThreshold=0.0001, miniBatchSize=100, weightDecay=0.0001, momentum=0.7, dropout=0.05):
         """Train the Multilayer perceptron
         Parameters
         ----------
@@ -130,7 +130,8 @@ class MultilayerPerceptron(Classifier):
             self.updateAllWeights(self.learningRate, weightDecay, momentum if iteration > 1 else 0.0)
 
             # Calculate the total error function in the validation set with current weights
-            error = sum(map(loss.calculateError, validationOutputs, map(self.fire, self.validationSet.input)))
+            # Normalization: Divide by number of samples times number of outputs; multiply by 100 to get the percentage
+            error = sum(map(loss.calculateError, validationOutputs, map(self.fire, self.validationSet.input))) / len(self.validationSet.input) / 10 * 100
             errorDelta = prevError - error
             # Save current configuration if it is the best so far
             if error < minError:
@@ -148,7 +149,7 @@ class MultilayerPerceptron(Classifier):
                 strikes = 0 if strikes == 0 else strikes - 1
             prevError = error # Update the error value for the next iteration
 
-            logging.info("Iteration: %2i; Error: %9.4f", iteration, error)
+            logging.info("Iteration: %2i; Error: %7.4f%%", iteration, error)
         
         # Restore best config from backup
         self.layers = self.bestConfig
